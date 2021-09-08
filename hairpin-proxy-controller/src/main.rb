@@ -60,7 +60,16 @@ class HairpinProxyController
   def check_and_rewrite_coredns
     @log.info("Polling all Ingress resources and CoreDNS configuration...")
     hosts = fetch_ingress_hosts
-    cm = @k8s.api.resource("configmaps", namespace: "kube-system").get("coredns")
+    begin
+      cm = @k8s.api.resource("configmaps", namespace: "kube-system").get("coredns")
+    rescue K8s::Error::NotFound, K8s::Error::UndefinedResource
+      @log.warn("Warning: Unable to get coredns configmap. Trying to get rke2's specific coredns configmap")
+      begin
+        cm = @k8s.api.resource("configmaps", namespace: "kube-system").get("rke2-coredns-rke2-coredns")
+      rescue K8s::Error::NotFound, K8s::Error::UndefinedResource
+        @log.fatal("Error: Failed to get coredns or rke2 rke2-coredns-rke2-coredns configmap")
+      end
+    end
 
     old_corefile = cm.data.Corefile
     new_corefile = coredns_corefile_with_rewrite_rules(old_corefile, hosts)
